@@ -163,6 +163,25 @@ Custom card layering
 
 This provides a fully compliant projection-based flip animation while keeping the code clean, typed, and compatible with modern module bundlers.
 
+🚀 Future Improvements (Given More Time)
+
+If I had additional time to continue developing the project, I would expand it with several quality-of-life and presentation enhancements:
+
+Richer visual assets – custom artwork for the table, themed backgrounds, animated card backs, and a more polished overall UI.
+
+Audio layer – background music, sound effects for flips, wins, and interactions, plus a mute toggle.
+
+Improved design & polish – smoother transitions, more detailed animations, refined spacing and layout, and general visual consistency.
+
+Accessibility features – larger text options, color-blind friendly palettes, keyboard navigation, and adjustable animation speed.
+
+Bonus mechanics – a “Double or Nothing” feature after big wins, or other optional risk/reward panels.
+
+More advanced animations – easing patterns, card anticipation effects, win bursts, and dynamic highlights.
+
+Full Pixi Projection integration – implementing true 3D card flips using pixi-projection once the correct compatible version is available.
+
+These additions would help make the game feel more complete, more polished, and much closer to a production-ready interactive experience.
 ✔️ What Was Delivered
 
 Full working game

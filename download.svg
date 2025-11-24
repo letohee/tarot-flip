@@ -1,0 +1,16 @@
+<svg width="240" height="360" viewBox="0 0 240 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- outer border -->
+  <rect x="8" y="8" width="224" height="344" rx="28" fill="#070512"></rect>
+  <!-- main card surface -->
+  <rect x="16" y="16" width="208" height="328" rx="24" fill="#151637"></rect>
+  <!-- inner frame -->
+  <rect x="32" y="32" width="176" height="296" rx="20" stroke="#F9D976" stroke-width="3" fill="#13252C"></rect>
+  <!-- center symbol -->
+  <circle cx="120" cy="180" r="46" fill="#1D3140" stroke="#F9D976" stroke-width="3"></circle>
+  <path d="M120 144L135 180L120 216L105 180Z" fill="#F9D976" opacity="0.9"></path>
+  <!-- corner pips -->
+  <rect x="44" y="48" width="20" height="20" rx="4" fill="#F9D976" opacity="0.8"></rect>
+  <rect x="176" y="48" width="20" height="20" rx="4" fill="#F9D976" opacity="0.8"></rect>
+  <rect x="44" y="292" width="20" height="20" rx="4" fill="#F9D976" opacity="0.8"></rect>
+  <rect x="176" y="292" width="20" height="20" rx="4" fill="#F9D976" opacity="0.8"></rect>
+</svg>

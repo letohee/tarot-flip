@@ -3,11 +3,14 @@ import * as PIXI from "pixi.js";
 import gsap from "gsap";
 import { getMultiplierColor } from "../config/multipliers";
 
+const CARD_WIDTH = 120;
+const CARD_HEIGHT = 180;
+
 export class TarotCard extends PIXI.Container {
   public multiplier = 1;
   public isRevealed = false;
 
-  private back: PIXI.Graphics;
+  private back: PIXI.Sprite;
   private front: PIXI.Graphics;
   private label: PIXI.Text;
 
@@ -17,12 +20,13 @@ export class TarotCard extends PIXI.Container {
   constructor() {
     super();
 
-    // BACK – dark purple with a border
-    this.back = new PIXI.Graphics();
-    this.back.lineStyle(3, 0x9b59ff);
-    this.back.beginFill(0x1b1030);
-    this.back.drawRoundedRect(-60, -90, 120, 180, 16);
-    this.back.endFill();
+    // BACK – SVG texture card back
+    // Make sure download.svg is in /public so this path works
+    const backTexture = PIXI.Texture.from("/download.svg");
+    this.back = new PIXI.Sprite(backTexture);
+    this.back.anchor.set(0.5);
+    this.back.width = CARD_WIDTH;
+    this.back.height = CARD_HEIGHT;
     this.addChild(this.back);
 
     // FRONT – will be recolored based on multiplier
@@ -31,7 +35,7 @@ export class TarotCard extends PIXI.Container {
     this.front.visible = false;
     this.addChild(this.front);
 
-    // Multiplier label on front (big, bright)
+    // Multiplier label on front
     this.label = new PIXI.Text("x1", {
       fill: 0x2c3e50,
       fontFamily: "Arial",
@@ -48,17 +52,23 @@ export class TarotCard extends PIXI.Container {
     this.label.visible = false;
     this.addChild(this.label);
 
-    // Soft fake shadow under card
+    // Soft shadow under card
     const shadow = new PIXI.Graphics();
     shadow.beginFill(0x000000, 0.35);
-    shadow.drawRoundedRect(-60, -90, 120, 180, 16);
+    shadow.drawRoundedRect(
+      -CARD_WIDTH / 2,
+      -CARD_HEIGHT / 2,
+      CARD_WIDTH,
+      CARD_HEIGHT,
+      16,
+    );
     shadow.endFill();
     shadow.position.set(4, 6);
     shadow.zIndex = -1;
     this.addChildAt(shadow, 0);
 
-  this.interactive = true;
-  (this as any).buttonMode = true;
+    this.interactive = true;
+    (this as any).buttonMode = true;
 
     this.on("pointerover", () => this.onHover(true));
     this.on("pointerout", () => this.onHover(false));
@@ -68,7 +78,13 @@ export class TarotCard extends PIXI.Container {
     this.front.clear();
     this.front.lineStyle(3, 0x9b59ff);
     this.front.beginFill(fillColor);
-    this.front.drawRoundedRect(-60, -90, 120, 180, 16);
+    this.front.drawRoundedRect(
+      -CARD_WIDTH / 2,
+      -CARD_HEIGHT / 2,
+      CARD_WIDTH,
+      CARD_HEIGHT,
+      16,
+    );
     this.front.endFill();
   }
 
@@ -99,8 +115,7 @@ export class TarotCard extends PIXI.Container {
   }
 
   /**
-   * Creates a GSAP flip animation and returns the timeline.
-   * flipDuration controls the speed (used for Normal/Fast modes).
+   * Simple flip animation: scale X to 0, swap front/back, scale back.
    */
   createFlipTimeline(flipDuration: number = 0.15): gsap.core.Timeline {
     const tl = gsap.timeline({
@@ -109,7 +124,7 @@ export class TarotCard extends PIXI.Container {
       },
     });
 
-    // 1) shrink to edge
+    // 1) shrink to an edge
     tl.to(this.scale, {
       x: 0,
       duration: flipDuration,
