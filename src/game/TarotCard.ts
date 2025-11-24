@@ -57,8 +57,8 @@ export class TarotCard extends PIXI.Container {
     shadow.zIndex = -1;
     this.addChildAt(shadow, 0);
 
-    this.interactive = true;
-    this.buttonMode = true;
+  this.interactive = true;
+  (this as any).buttonMode = true;
 
     this.on("pointerover", () => this.onHover(true));
     this.on("pointerout", () => this.onHover(false));
