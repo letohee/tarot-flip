@@ -6,9 +6,9 @@ import { GameState } from "./state";
 import { pickWeightedMultiplier } from "../config/multipliers";
 import { ResultPopup, ResultData } from "../ui/ResultPopup";
 import { PayTableOverlay } from "../ui/PayTable";
+
 // Helper so we can use buttonMode without fighting the TS types
 function setButtonMode(obj: PIXI.DisplayObject): void {
-  // pixi v7 supports `buttonMode`, but the typings we're using don't.
   (obj as any).buttonMode = true;
 }
 
@@ -29,6 +29,10 @@ interface PersistedState {
 export class Game {
   private app: PIXI.Application;
   private root: PIXI.Container;
+
+  // "Design" size used for layout, we scale from this
+  private designWidth: number;
+  private designHeight: number;
 
   private state: GameState = GameState.Idle;
 
@@ -66,20 +70,38 @@ export class Game {
   private autoStopRequested = false;
   private autoSpeedBackup: SpeedMode = "normal";
 
-  private currentRevealIndex = 0;
+  // ROUND DATA
   private currentMultipliers: number[] = [];
+  private revealedCount = 0;
+
+  // Instructions overlay
+  private instructionsOverlay?: PIXI.Container;
 
   constructor(app: PIXI.Application, options: GameOptions) {
     this.app = app;
     this.root = new PIXI.Container();
     this.app.stage.addChild(this.root);
 
-    const persisted = this.loadPersistentState();
+    // Store initial width/height as our "design" coordinate space
+    this.designWidth = options.width;
+    this.designHeight = options.height;
 
+    const persisted = this.loadPersistentState();
     this.bet = persisted?.bet ?? options.bet ?? 1;
     this.balance = persisted?.balance ?? options.balance ?? 100;
 
-    this.init(options.width, options.height);
+    this.init(this.designWidth, this.designHeight);
+
+    // Listen for resize events from main.ts
+    (this.app.stage as any).on(
+      "resize",
+      (payload: { width: number; height: number }) => {
+        this.onResize(payload.width, payload.height);
+      },
+    );
+
+    // Initial fit
+    this.onResize(this.app.renderer.width, this.app.renderer.height);
   }
 
   // ---------- Persistence ----------
@@ -110,6 +132,21 @@ export class Game {
     } catch {
       // ignore
     }
+  }
+
+  // ---------- Resize / mobile fit ----------
+
+  private onResize(screenWidth: number, screenHeight: number): void {
+    // Scale to fit, preserve aspect ratio
+    const scaleX = screenWidth / this.designWidth;
+    const scaleY = screenHeight / this.designHeight;
+    const scale = Math.min(scaleX, scaleY);
+
+    this.root.scale.set(scale);
+
+    // Center the game area
+    this.root.x = (screenWidth - this.designWidth * scale) / 2;
+    this.root.y = (screenHeight - this.designHeight * scale) / 2;
   }
 
   // ---------- Init ----------
@@ -222,12 +259,12 @@ export class Game {
     });
     this.speedText.anchor.set(1, 0);
     this.speedText.position.set(width - 20, 20);
-  this.speedText.interactive = true;
-  setButtonMode(this.speedText);
+    this.speedText.interactive = true;
+    setButtonMode(this.speedText);
     this.speedText.on("pointertap", () => this.toggleSpeed());
     this.root.addChild(this.speedText);
 
-    // "Pay Table" button (top-right under speed)
+    // "Pay Table" button
     const payTableBtn = new PIXI.Text("Pay Table", {
       fill: 0x90caf9,
       fontFamily: "Arial",
@@ -235,10 +272,23 @@ export class Game {
     });
     payTableBtn.anchor.set(1, 0);
     payTableBtn.position.set(width - 20, 45);
-  payTableBtn.interactive = true;
-  setButtonMode(payTableBtn);
+    payTableBtn.interactive = true;
+    setButtonMode(payTableBtn);
     payTableBtn.on("pointertap", () => this.payTable.toggle());
     this.root.addChild(payTableBtn);
+
+    // "How to Play" button
+    const infoButton = new PIXI.Text("How to Play", {
+      fill: 0x90caf9,
+      fontFamily: "Arial",
+      fontSize: 14,
+    });
+    infoButton.anchor.set(0, 0);
+    infoButton.position.set(20, 45);
+    infoButton.interactive = true;
+    setButtonMode(infoButton);
+    infoButton.on("pointertap", () => this.toggleInstructions());
+    this.root.addChild(infoButton);
 
     // BET UI
     const betY = height - 130;
@@ -257,8 +307,8 @@ export class Game {
     this.betMinusBtn.drawRoundedRect(-20, -20, 40, 40, 8);
     this.betMinusBtn.endFill();
     this.betMinusBtn.position.set(width / 2 - 100, betY);
-  this.betMinusBtn.interactive = true;
-  setButtonMode(this.betMinusBtn);
+    this.betMinusBtn.interactive = true;
+    setButtonMode(this.betMinusBtn);
     this.betMinusBtn.on("pointertap", () => this.adjustBet(-1));
     this.root.addChild(this.betMinusBtn);
 
@@ -268,7 +318,10 @@ export class Game {
       fontSize: 24,
     });
     minusLabel.anchor.set(0.5);
-    minusLabel.position.set(this.betMinusBtn.position.x, this.betMinusBtn.position.y - 1);
+    minusLabel.position.set(
+      this.betMinusBtn.position.x,
+      this.betMinusBtn.position.y - 1,
+    );
     this.root.addChild(minusLabel);
 
     this.betPlusBtn = new PIXI.Graphics();
@@ -276,8 +329,8 @@ export class Game {
     this.betPlusBtn.drawRoundedRect(-20, -20, 40, 40, 8);
     this.betPlusBtn.endFill();
     this.betPlusBtn.position.set(width / 2 + 100, betY);
-  this.betPlusBtn.interactive = true;
-  setButtonMode(this.betPlusBtn);
+    this.betPlusBtn.interactive = true;
+    setButtonMode(this.betPlusBtn);
     this.betPlusBtn.on("pointertap", () => this.adjustBet(1));
     this.root.addChild(this.betPlusBtn);
 
@@ -287,7 +340,10 @@ export class Game {
       fontSize: 24,
     });
     plusLabel.anchor.set(0.5);
-    plusLabel.position.set(this.betPlusBtn.position.x, this.betPlusBtn.position.y - 1);
+    plusLabel.position.set(
+      this.betPlusBtn.position.x,
+      this.betPlusBtn.position.y - 1,
+    );
     this.root.addChild(plusLabel);
 
     // PLAY BUTTON
@@ -297,8 +353,8 @@ export class Game {
     this.playButton.endFill();
     this.playButton.x = width / 2;
     this.playButton.y = height - 70;
-  this.playButton.interactive = true;
-  setButtonMode(this.playButton);
+    this.playButton.interactive = true;
+    setButtonMode(this.playButton);
     this.playButton.on("pointertap", () => this.startRound());
     this.root.addChild(this.playButton);
 
@@ -318,8 +374,8 @@ export class Game {
     this.autoButton.endFill();
     this.autoButton.x = width / 2;
     this.autoButton.y = height - 30;
-  this.autoButton.interactive = true;
-  setButtonMode(this.autoButton);
+    this.autoButton.interactive = true;
+    setButtonMode(this.autoButton);
     this.autoButton.on("pointertap", () => this.onAutoButtonClick());
     this.root.addChild(this.autoButton);
 
@@ -345,6 +401,72 @@ export class Game {
     this.updateBalanceDisplay();
     this.updateAutoButton();
     this.setState(GameState.Idle);
+  }
+
+  // ---------- Instructions overlay ----------
+
+  private toggleInstructions(): void {
+    if (this.instructionsOverlay && this.instructionsOverlay.parent) {
+      this.instructionsOverlay.destroy({ children: true });
+      this.instructionsOverlay = undefined;
+      return;
+    }
+
+    const width = this.designWidth;
+    const height = this.designHeight;
+
+    const overlay = new PIXI.Container();
+
+    const dim = new PIXI.Graphics();
+    dim.beginFill(0x000000, 0.75);
+    dim.drawRect(0, 0, width, height);
+    dim.endFill();
+    overlay.addChild(dim);
+
+    const panelWidth = Math.min(440, width - 60);
+    const panelHeight = Math.min(320, height - 80);
+
+    const panel = new PIXI.Graphics();
+    panel.beginFill(0x101426);
+    panel.drawRoundedRect(0, 0, panelWidth, panelHeight, 24);
+    panel.endFill();
+    panel.x = (width - panelWidth) / 2;
+    panel.y = (height - panelHeight) / 2;
+    overlay.addChild(panel);
+
+    const text = new PIXI.Text(
+      "How to Play\n\n" +
+        "• Adjust your bet using - / +.\n" +
+        "• Press Play to deal three cards.\n" +
+        "• Tap any card to reveal its multiplier (in any order).\n" +
+        "• Your win is your bet multiplied by the combined multipliers " +
+        "(0x cards do not contribute).\n\n" +
+        "Use Auto x10 for a fast series of rounds.\nTap anywhere to close this window.",
+      {
+        fill: 0xffffff,
+        fontFamily: "Arial",
+        fontSize: 16,
+        wordWrap: true,
+        wordWrapWidth: panelWidth - 40,
+        align: "left",
+      },
+    );
+    text.anchor.set(0.5);
+    text.position.set(
+      panel.x + panelWidth / 2,
+      panel.y + panelHeight / 2,
+    );
+    overlay.addChild(text);
+
+    overlay.interactive = true;
+    overlay.on("pointertap", () => {
+      overlay.destroy({ children: true });
+      this.instructionsOverlay = undefined;
+    });
+
+    this.root.addChild(overlay);
+    this.root.setChildIndex(overlay, this.root.children.length - 1);
+    this.instructionsOverlay = overlay;
   }
 
   // ---------- Formatting helpers ----------
@@ -466,7 +588,9 @@ export class Game {
 
       this.autoRoundsRemaining -= 1;
       this.updateAutoButton();
-      this.statusText.text = `Auto-play: ${this.autoRoundsRemaining + 1} rounds left`;
+      this.statusText.text = `Auto-play: ${
+        this.autoRoundsRemaining + 1
+      } rounds left`;
 
       this.setState(GameState.Idle);
       this.startRound();
@@ -497,13 +621,15 @@ export class Game {
       case GameState.RoundStart:
         this.playButton.alpha = 0.5;
         this.playButton.interactive = false;
-        this.statusText.text = this.isAutoPlay ? "Auto-play: dealing…" : "Preparing cards…";
+        this.statusText.text = this.isAutoPlay
+          ? "Auto-play: dealing…"
+          : "Preparing cards…";
         break;
 
       case GameState.Reveal:
         this.statusText.text = this.isAutoPlay
           ? "Auto-play: revealing cards"
-          : "Tap cards in order to reveal";
+          : "Tap any card to reveal";
         break;
 
       case GameState.Result:
@@ -526,8 +652,8 @@ export class Game {
     this.updateBalanceDisplay();
 
     this.setState(GameState.RoundStart);
-    this.currentRevealIndex = 0;
     this.currentMultipliers = [];
+    this.revealedCount = 0;
 
     const multipliers = [
       pickWeightedMultiplier(),
@@ -547,8 +673,8 @@ export class Game {
       onComplete: () => {
         this.setState(GameState.Reveal);
         if (this.isAutoPlay) {
-          this.currentRevealIndex = 0;
           this.currentMultipliers = [];
+          this.revealedCount = 0;
           this.autoRevealNextCard();
         }
       },
@@ -570,17 +696,17 @@ export class Game {
   }
 
   private autoRevealNextCard(): void {
-    if (this.currentRevealIndex >= this.cards.length) {
+    const card = this.cards.find((c) => !c.isRevealed);
+    if (!card) {
       this.showResult();
       return;
     }
 
-    const card = this.cards[this.currentRevealIndex];
     const flipDuration = this.getFlipDuration();
     const tl = card.createFlipTimeline(flipDuration);
 
     this.currentMultipliers.push(card.multiplier);
-    this.currentRevealIndex += 1;
+    this.revealedCount += 1;
 
     tl.call(() => this.autoRevealNextCard());
   }
@@ -590,95 +716,77 @@ export class Game {
     if (this.state !== GameState.Reveal) return;
     if (card.isRevealed) return;
 
-    const index = this.cards.indexOf(card);
-    if (index !== this.currentRevealIndex) return;
-
     const flipDuration = this.getFlipDuration();
     const tl = card.createFlipTimeline(flipDuration);
 
     this.currentMultipliers.push(card.multiplier);
-    this.currentRevealIndex += 1;
+    this.revealedCount += 1;
 
-    if (this.currentRevealIndex >= this.cards.length) {
+    if (this.revealedCount >= this.cards.length) {
       tl.call(() => this.showResult());
     }
   }
 
   private playWinSplash(payout: number, product: number): void {
-  // Only show splash for positive wins
-  if (payout <= 0) return;
+    if (payout <= 0) return;
 
-  // Ensure the splash text is above everything else
-  this.root.setChildIndex(this.winText, this.root.children.length - 1);
+    this.root.setChildIndex(this.winText, this.root.children.length - 1);
 
-  this.winText.text = `Win x${product.toFixed(2)} (+${payout.toFixed(2)})`;
-  this.winText.visible = true;
-  this.winText.alpha = 0;
-  this.winText.scale.set(0.8);
+    this.winText.text = `Win x${product.toFixed(2)} (+${payout.toFixed(2)})`;
+    this.winText.visible = true;
+    this.winText.alpha = 0;
+    this.winText.scale.set(0.8);
 
-  // Pop in
-  gsap.to(this.winText, {
-    alpha: 1,
-    scale: 1.1,
-    y: this.winText.y - 8,
-    duration: 0.3,
-    ease: "back.out(1.7)",
-  });
+    gsap.to(this.winText, {
+      alpha: 1,
+      scale: 1.1,
+      y: this.winText.y - 8,
+      duration: 0.3,
+      ease: "back.out(1.7)",
+    });
 
-  // Float & fade out
-  gsap.to(this.winText, {
-    alpha: 0,
-    y: this.winText.y - 20,
-    duration: 0.5,
-    delay: 0.7,
-    ease: "sine.in",
-    onComplete: () => {
-      this.winText.visible = false;
-    },
-  });
-}
+    gsap.to(this.winText, {
+      alpha: 0,
+      y: this.winText.y - 20,
+      duration: 0.5,
+      delay: 0.7,
+      ease: "sine.in",
+      onComplete: () => {
+        this.winText.visible = false;
+      },
+    });
+  }
 
+  private showResult(): void {
+    this.setState(GameState.Result);
 
- private showResult(): void {
-  this.setState(GameState.Result);
+    const rawMultipliers = this.currentMultipliers;
+    const positiveMultipliers = rawMultipliers.filter((m) => m > 0);
+    const product =
+      positiveMultipliers.length > 0
+        ? positiveMultipliers.reduce((acc, m) => acc * m, 1)
+        : 0;
 
-  // Raw card multipliers, including any 0.0x cards
-  const rawMultipliers = this.currentMultipliers;
+    const payout = product * this.bet;
 
-  // 🟡 NEW LOGIC:
-  // - ignore 0x cards when computing the effective product
-  // - if ALL cards are 0x → product = 0 (no win)
-  const positiveMultipliers = rawMultipliers.filter((m) => m > 0);
-  const product =
-    positiveMultipliers.length > 0
-      ? positiveMultipliers.reduce((acc, m) => acc * m, 1)
-      : 0;
+    const data: ResultData = {
+      bet: this.bet,
+      multipliers: rawMultipliers,
+      product,
+      payout,
+    };
 
-  const payout = product * this.bet;
+    console.log("showResult() called with:", data);
 
-  const data: ResultData = {
-    bet: this.bet,
-    multipliers: rawMultipliers, // still show all cards in the popup
-    product,
-    payout,
-  };
+    this.balance += payout;
+    this.updateBalanceDisplay();
 
-  console.log("showResult() called with:", data);
+    this.root.setChildIndex(this.resultPopup, this.root.children.length - 1);
+    this.resultPopup.show(data, () => {
+      this.handleRoundComplete();
+    });
 
-  // Update balance with payout
-  this.balance += payout;
-  this.updateBalanceDisplay();
-
-  // 🔔 Win splash uses the effective product and payout
-  // Make sure popup is on top and visible
-  this.root.setChildIndex(this.resultPopup, this.root.children.length - 1);
-  this.resultPopup.show(data, () => {
-    this.handleRoundComplete(); // whatever you had here before
-  });
-
-  // Ensure the win splash is above the popup so it's visible to the player
-  this.root.setChildIndex(this.winText, this.root.children.length - 1);
-  this.playWinSplash(payout, product);
-}
-
+    this.root.setChildIndex(this.winText, this.root.children.length - 1);
+    this.playWinSplash(payout, product);
+  }
 }
